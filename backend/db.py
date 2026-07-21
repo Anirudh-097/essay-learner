@@ -53,6 +53,21 @@ def get_topic(database_path: Path = DEFAULT_DATABASE, topic_id: int = 0) -> sqli
         ).fetchone()
 
 
+def get_random_practice_topic(
+    database_path: Path = DEFAULT_DATABASE, exclude_topic_id: int | None = None
+) -> sqlite3.Row | None:
+    with connect(database_path) as connection:
+        if exclude_topic_id is None:
+            return connection.execute(
+                "SELECT id, topic, used, last_used FROM topics ORDER BY RANDOM() LIMIT 1"
+            ).fetchone()
+        return connection.execute(
+            """SELECT id, topic, used, last_used FROM topics
+               WHERE id != ? ORDER BY RANDOM() LIMIT 1""",
+            (exclude_topic_id,),
+        ).fetchone()
+
+
 def get_or_assign_today(database_path: Path = DEFAULT_DATABASE) -> sqlite3.Row | None:
     """Return today's topic, assigning one if today's topic does not exist."""
 
