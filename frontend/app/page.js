@@ -25,6 +25,7 @@ export default function HomePage() {
   const [essay, setEssay] = useState("");
   const [paragraph, setParagraph] = useState("");
   const [evaluation, setEvaluation] = useState(null);
+  const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState("topic");
   const [error, setError] = useState("");
 
@@ -40,6 +41,7 @@ export default function HomePage() {
       const today = await request("/topic/today");
       setTopic(today);
       await loadPractice(today.id);
+      setProgress(await request("/progress"));
       setLoading("");
     } catch (requestError) {
       setLoading("");
@@ -66,6 +68,21 @@ export default function HomePage() {
       setLoading("");
     }
   }
+
+  const chartAttempts = progress?.attempts || [];
+  const chartWidth = 640;
+  const chartHeight = 180;
+  const chartPoints = chartAttempts.map((attempt, index) => {
+    const x = chartAttempts.length === 1 ? chartWidth / 2 : (index / (chartAttempts.length - 1)) * chartWidth;
+    const y = chartHeight - ((attempt.score - 1) / 5) * chartHeight;
+    return `${x},${y}`;
+  }).join(" ");
+  const metricLabels = {
+    grammar: "Grammar",
+    vocabulary: "Vocabulary",
+    structure: "Structure",
+    argument_quality: "Argument quality",
+  };
 
   async function evaluateParagraph(event) {
     event.preventDefault();
@@ -226,6 +243,47 @@ export default function HomePage() {
               </>
             )}
           </article>
+
+          <section className="rounded-[2rem] bg-ink p-8 text-white shadow-[0_24px_80px_rgba(23,32,51,0.14)] sm:p-10">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">Progress</p>
+                <h2 className="mt-4 font-display text-3xl leading-tight">Your writing, over time.</h2>
+              </div>
+              <p className="text-sm text-white/55">{progress?.total_attempts || 0} evaluated {progress?.total_attempts === 1 ? "attempt" : "attempts"}</p>
+            </div>
+            {progress && progress.attempts.length > 0 ? (
+              <>
+                <div className="mt-8 overflow-hidden rounded-2xl bg-white/5 p-4">
+                  <svg className="h-48 w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Overall score trend">
+                    <line x1="0" y1="0" x2={chartWidth} y2="0" stroke="rgba(255,255,255,.12)" />
+                    <line x1="0" y1={chartHeight / 2} x2={chartWidth} y2={chartHeight / 2} stroke="rgba(255,255,255,.12)" />
+                    <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="rgba(255,255,255,.12)" />
+                    <polyline points={chartPoints} fill="none" stroke="#dc6b4c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    {progress.attempts.map((attempt, index) => {
+                      const [x, y] = chartPoints.split(" ")[index].split(",");
+                      return <circle key={attempt.id} cx={x} cy={y} r="5" fill="#f7f4ee" stroke="#dc6b4c" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
+                    })}
+                  </svg>
+                  <div className="flex justify-between text-xs text-white/40"><span>Score 1</span><span>Overall score trend</span><span>Score 6</span></div>
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {Object.entries(metricLabels).map(([key, label]) => {
+                    const metric = progress.metrics[key];
+                    return (
+                      <div key={key} className="rounded-2xl bg-white/10 p-4">
+                        <p className="text-xs text-white/55">{label}</p>
+                        <p className="mt-2 font-display text-3xl text-coral">{metric.average.toFixed(1)}<span className="text-sm text-white/45"> / 6</span></p>
+                        <p className="mt-1 text-xs text-white/40">Latest: {metric.latest ?? "—"}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="mt-8 rounded-2xl bg-white/5 p-6 text-sm leading-6 text-white/60">Complete your first paragraph evaluation to start tracking your progress.</p>
+            )}
+          </section>
         </section>
 
         <footer className="mt-16 flex items-center justify-between border-t border-ink/10 pt-5 text-xs text-ink/45">

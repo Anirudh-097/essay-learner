@@ -15,6 +15,8 @@ The API uses `data/topics.db` by default. Available endpoints:
 - `POST /essay/generate` with `{"topic_id": 1}`
 - `GET /practice/prompt?exclude_topic_id=1`
 - `POST /evaluate` with a topic ID, paragraph type, and paragraph
+- `GET /progress` for attempt history and grammar, vocabulary, structure, and
+  argument-quality averages
 
 To enable the Groq-backed essay and evaluation endpoints locally, copy
 `.env.example` to `.env` and add your key from [console.groq.com](https://console.groq.com):
