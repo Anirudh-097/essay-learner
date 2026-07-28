@@ -110,7 +110,7 @@ export default function HomePage() {
 
         {error && <div className="mb-8"><ErrorMessage message={error} /></div>}
 
-        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="flex flex-col gap-8">
           <article className="rounded-[2rem] bg-white p-8 shadow-[0_24px_80px_rgba(23,32,51,0.10)] sm:p-12">
             <div className="mb-10 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-ink/40">
               <span>Issue topic</span>
@@ -173,7 +173,55 @@ export default function HomePage() {
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-ink/70">{evaluation.weaknesses.map((item) => <li key={item}>{item}</li>)}</ul>
                     <p className="mt-5 font-semibold">Suggested rewrite</p>
                     <p className="mt-2 text-sm leading-6 text-ink/70">{evaluation.suggested_rewrite}</p>
+
+                    {evaluation.better_vocabulary && evaluation.better_vocabulary.length > 0 && (
+                      <>
+                        <p className="mt-8 font-semibold">Vocabulary improvements</p>
+                        <div className="mt-3 space-y-3">
+                          {evaluation.better_vocabulary.map((item, index) => {
+                            // Extract synonyms safely to handle both old and new backend/LLM formats
+                            let synList = [];
+                            if (Array.isArray(item.synonyms)) {
+                              synList = item.synonyms;
+                            } else if (typeof item.synonyms === "string") {
+                              synList = [item.synonyms];
+                            } else if (Array.isArray(item.alternative)) {
+                              synList = item.alternative;
+                            } else if (typeof item.alternative === "string") {
+                              synList = [item.alternative];
+                            } else if (item.alternative) {
+                              synList = [String(item.alternative)];
+                            }
+
+                            return (
+                              <div key={index} className="rounded-2xl border border-ink/5 bg-white/50 p-5">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink/30">Word</span>
+                                  <span className="font-display text-lg font-medium text-coral">{item.word}</span>
+                                </div>
+                                {synList.length > 0 && (
+                                  <div className="mt-2 flex items-start gap-3">
+                                    <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink/30">Synonyms</span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {synList.map((syn) => (
+                                        <span key={syn} className="rounded-lg bg-ink/5 px-2.5 py-1 text-xs font-semibold text-ink/70">
+                                          {syn}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {item.context && (
+                                  <p className="mt-3 text-xs leading-relaxed text-ink/50 italic">{item.context}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
+
                 )}
               </>
             )}

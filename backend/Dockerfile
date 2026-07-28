@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY data/ ./data/
 COPY scripts/ ./scripts/
+COPY prompts/ ./prompts/
 
 # Expose FastAPI backend port
 EXPOSE 8000

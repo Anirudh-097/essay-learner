@@ -7,18 +7,17 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from . import db
-from . import openrouter
+from . import groq
 
 
 PARAGRAPH_TYPES = (
-    "Introduction",
-    "Primary argument",
-    "Secondary argument",
-    "Counterargument",
-    "Conclusion",
+    "introduction",
+    "primary argument",
+    "counter-argument",
+    "conclusion",
 )
 
 
@@ -54,12 +53,18 @@ class EvaluationRequest(BaseModel):
     paragraph: str
 
 
+class VocabularySuggestion(BaseModel):
+    word: str
+    synonyms: list[str]
+    context: str
+
+
 class Evaluation(BaseModel):
     score: int
     strengths: list[str]
     weaknesses: list[str]
     suggested_rewrite: str
-    better_vocabulary: list[dict[str, str]]
+    better_vocabulary: list[VocabularySuggestion]
 
 
 class EvaluationResponse(BaseModel):
@@ -69,9 +74,13 @@ class EvaluationResponse(BaseModel):
 
 
 app = FastAPI(title="Essay Learner API", version="0.1.0")
+# Allow requests from your Next.js frontend running on localhost:3000
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -131,8 +140,8 @@ def require_topic(topic_id: int) -> Topic:
 def generate_essay(request: EssayRequest) -> EssayResponse:
     topic = require_topic(request.topic_id)
     try:
-        essay = openrouter.complete("essay.txt", {"topic": topic.topic})
-    except openrouter.OpenRouterError as error:
+        essay = groq.complete("essay.txt", {"topic": topic.topic})
+    except groq.GroqError as error:
         status = 503 if "not configured" in str(error) else 502
         raise HTTPException(status_code=status, detail=str(error)) from error
     return EssayResponse(topic=topic, essay=essay)
@@ -158,7 +167,7 @@ def evaluate_paragraph(request: EvaluationRequest) -> EvaluationResponse:
         raise HTTPException(status_code=422, detail="Paragraph cannot be empty")
     topic = require_topic(request.topic_id)
     try:
-        raw_evaluation = openrouter.complete(
+        raw_evaluation = groq.complete_json(
             "evaluate.txt",
             {
                 "topic": topic.topic,
@@ -166,16 +175,11 @@ def evaluate_paragraph(request: EvaluationRequest) -> EvaluationResponse:
                 "paragraph": request.paragraph.strip(),
             },
         )
-        cleaned = raw_evaluation.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        evaluation = Evaluation.model_validate_json(cleaned.strip())
-    except openrouter.OpenRouterError as error:
+        evaluation = Evaluation.model_validate_json(raw_evaluation)
+    except groq.GroqError as error:
         status = 503 if "not configured" in str(error) else 502
         raise HTTPException(status_code=status, detail=str(error)) from error
-    except ValueError as error:
+    except (ValidationError, ValueError) as error:
         raise HTTPException(status_code=502, detail="Model returned invalid evaluation JSON") from error
     return EvaluationResponse(
         topic=topic, paragraph_type=request.paragraph_type, evaluation=evaluation
