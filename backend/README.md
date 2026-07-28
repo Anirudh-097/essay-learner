@@ -16,18 +16,19 @@ The API uses `data/topics.db` by default. Available endpoints:
 - `GET /practice/prompt?exclude_topic_id=1`
 - `POST /evaluate` with a topic ID, paragraph type, and paragraph
 
-To enable the OpenRouter-backed essay and evaluation endpoints locally, copy
-`.env.example` to `.env` and add the key:
+To enable the Groq-backed essay and evaluation endpoints locally, copy
+`.env.example` to `.env` and add your key from [console.groq.com](https://console.groq.com):
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENROUTER_API_KEY
+# edit .env and set GROQ_API_KEY
 venv/bin/uvicorn backend.main:app --reload
 ```
 
-`OPENROUTER_MODEL` is optional; the shown model is the default. The key is only
-read by the backend and is never sent to the frontend. The `.env` file is
-ignored by Git.
+`GROQ_MODEL` is optional; the default is `llama-3.3-70b-versatile` (free tier).
+Other free-tier options include `llama-3.1-8b-instant` (faster, higher daily
+limits) and `openai/gpt-oss-20b`. The key is only read by the backend and is
+never sent to the frontend. The `.env` file is ignored by Git.
 
 For Docker, inject the same variables at runtime rather than copying `.env`
 into the image:

@@ -1,5 +1,7 @@
 services:
   backend:
+    env_file:
+      - .env
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -8,6 +10,7 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+      - GROQ_API_KEY=${GROQ_API_KEY}
     volumes:
       - ./data:/app/data
       - ./scripts:/app/scripts
@@ -20,6 +23,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
