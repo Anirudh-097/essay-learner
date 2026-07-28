@@ -77,6 +77,10 @@ Return ONLY valid JSON with exactly these keys:
 
 {{
   "score": integer from 1 to 6,
+  "grammar": integer from 1 to 6,
+  "vocabulary": integer from 1 to 6,
+  "structure": integer from 1 to 6,
+  "argument_quality": integer from 1 to 6,
   "strengths": [
     "brief concrete observation",
     "..."
@@ -97,6 +101,8 @@ Return ONLY valid JSON with exactly these keys:
     }}
   ]
 }}
+
+Dimension scores must be independent 1–6 ratings: grammar measures correctness and sentence control; vocabulary measures precision and range; structure measures organization and transitions; argument_quality measures reasoning, development, and support. The overall score should reflect the paragraph as a whole.
 
 Vocabulary Analysis Instructions:
 - Identify at least 3 common, weak, repetitive, or informal words from the paragraph.

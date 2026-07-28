@@ -7,7 +7,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from . import db
 from . import groq
@@ -60,7 +60,11 @@ class VocabularySuggestion(BaseModel):
 
 
 class Evaluation(BaseModel):
-    score: int
+    score: int = Field(ge=1, le=6)
+    grammar: int = Field(ge=1, le=6)
+    vocabulary: int = Field(ge=1, le=6)
+    structure: int = Field(ge=1, le=6)
+    argument_quality: int = Field(ge=1, le=6)
     strengths: list[str]
     weaknesses: list[str]
     suggested_rewrite: str
@@ -71,6 +75,28 @@ class EvaluationResponse(BaseModel):
     topic: Topic
     paragraph_type: str
     evaluation: Evaluation
+
+
+class ProgressMetric(BaseModel):
+    average: float
+    latest: int | None = None
+
+
+class ProgressAttempt(BaseModel):
+    id: int
+    score: int
+    grammar: int
+    vocabulary: int
+    structure: int
+    argument_quality: int
+    paragraph_type: str
+    created_at: datetime
+
+
+class ProgressResponse(BaseModel):
+    total_attempts: int
+    metrics: dict[str, ProgressMetric]
+    attempts: list[ProgressAttempt]
 
 
 app = FastAPI(title="Essay Learner API", version="0.1.0")
@@ -181,6 +207,41 @@ def evaluate_paragraph(request: EvaluationRequest) -> EvaluationResponse:
         raise HTTPException(status_code=status, detail=str(error)) from error
     except (ValidationError, ValueError) as error:
         raise HTTPException(status_code=502, detail="Model returned invalid evaluation JSON") from error
+    db.save_attempt(
+        topic_id=topic.id,
+        paragraph_type=request.paragraph_type,
+        score=evaluation.score,
+        grammar=evaluation.grammar,
+        vocabulary=evaluation.vocabulary,
+        structure=evaluation.structure,
+        argument_quality=evaluation.argument_quality,
+    )
     return EvaluationResponse(
         topic=topic, paragraph_type=request.paragraph_type, evaluation=evaluation
+    )
+
+
+@app.get("/progress", response_model=ProgressResponse)
+def progress() -> ProgressResponse:
+    rows = db.get_progress()
+    fields = ("grammar", "vocabulary", "structure", "argument_quality")
+    metrics = {}
+    for field in fields:
+        values = [row[field] for row in rows]
+        metrics[field] = ProgressMetric(
+            average=round(sum(values) / len(values), 2) if values else 0,
+            latest=values[-1] if values else None,
+        )
+    return ProgressResponse(
+        total_attempts=len(rows),
+        metrics=metrics,
+        attempts=[
+            ProgressAttempt(
+                id=row["id"], score=row["score"], grammar=row["grammar"],
+                vocabulary=row["vocabulary"], structure=row["structure"],
+                argument_quality=row["argument_quality"],
+                paragraph_type=row["paragraph_type"], created_at=row["created_at"],
+            )
+            for row in rows
+        ],
     )

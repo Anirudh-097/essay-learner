@@ -19,6 +19,19 @@ CREATE TABLE IF NOT EXISTS topics (
     used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
     last_used TEXT
 );
+
+CREATE TABLE IF NOT EXISTS attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL,
+    paragraph_type TEXT NOT NULL,
+    score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 6),
+    grammar INTEGER NOT NULL CHECK (grammar BETWEEN 1 AND 6),
+    vocabulary INTEGER NOT NULL CHECK (vocabulary BETWEEN 1 AND 6),
+    structure INTEGER NOT NULL CHECK (structure BETWEEN 1 AND 6),
+    argument_quality INTEGER NOT NULL CHECK (argument_quality BETWEEN 1 AND 6),
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (topic_id) REFERENCES topics(id)
+);
 """
 
 
@@ -108,3 +121,40 @@ def get_or_assign_today(database_path: Path = DEFAULT_DATABASE) -> sqlite3.Row |
             "SELECT id, topic, used, last_used FROM topics WHERE id = ?",
             (selected["id"],),
         ).fetchone()
+
+
+def save_attempt(
+    topic_id: int,
+    paragraph_type: str,
+    score: int,
+    grammar: int,
+    vocabulary: int,
+    structure: int,
+    argument_quality: int,
+    database_path: Path = DEFAULT_DATABASE,
+) -> sqlite3.Row:
+    created_at = datetime.now(timezone.utc).isoformat()
+    with connect(database_path) as connection:
+        cursor = connection.execute(
+            """INSERT INTO attempts
+               (topic_id, paragraph_type, score, grammar, vocabulary, structure,
+                argument_quality, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (topic_id, paragraph_type, score, grammar, vocabulary, structure,
+             argument_quality, created_at),
+        )
+        return connection.execute(
+            """SELECT id, topic_id, paragraph_type, score, grammar, vocabulary,
+                      structure, argument_quality, created_at
+               FROM attempts WHERE id = ?""",
+            (cursor.lastrowid,),
+        ).fetchone()
+
+
+def get_progress(database_path: Path = DEFAULT_DATABASE) -> list[sqlite3.Row]:
+    with connect(database_path) as connection:
+        return connection.execute(
+            """SELECT id, topic_id, paragraph_type, score, grammar, vocabulary,
+                      structure, argument_quality, created_at
+               FROM attempts ORDER BY created_at"""
+        ).fetchall()
