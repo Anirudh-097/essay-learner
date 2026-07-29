@@ -7,6 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...options.headers },
     cache: "no-store",
   });
@@ -19,7 +20,52 @@ function ErrorMessage({ message }) {
   return <p className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">{message}</p>;
 }
 
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const user = await request("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+      onLogin(user);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-paper px-6 text-ink">
+      <form className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-[0_24px_80px_rgba(23,32,51,0.10)] sm:p-12" onSubmit={submit}>
+        <p className="font-display text-xl font-semibold tracking-tight">essay<span className="text-coral">.</span>learner</p>
+        <p className="mt-10 text-sm font-semibold uppercase tracking-[0.24em] text-coral">Private practice</p>
+        <h1 className="mt-4 font-display text-4xl leading-tight">Welcome back.</h1>
+        <p className="mt-4 text-sm leading-6 text-ink/60">Sign in to continue your writing practice.</p>
+        {error && <div className="mt-6"><ErrorMessage message={error} /></div>}
+        <label className="mt-8 block text-sm font-semibold" htmlFor="username">Username</label>
+        <input className="mt-2 w-full rounded-xl border border-ink/15 bg-paper px-4 py-3 outline-none focus:border-coral" id="username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
+        <label className="mt-5 block text-sm font-semibold" htmlFor="password">Password</label>
+        <input className="mt-2 w-full rounded-xl border border-ink/15 bg-paper px-4 py-3 outline-none focus:border-coral" id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+        <button className="mt-7 w-full rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral disabled:cursor-wait disabled:opacity-60" disabled={loading} type="submit">
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
 export default function HomePage() {
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [topic, setTopic] = useState(null);
   const [practice, setPractice] = useState(null);
   const [essay, setEssay] = useState("");
@@ -50,8 +96,28 @@ export default function HomePage() {
   }, [loadPractice]);
 
   useEffect(() => {
-    loadPage();
-  }, [loadPage]);
+    request("/auth/me")
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  useEffect(() => {
+    if (user) loadPage();
+  }, [user, loadPage]);
+
+  if (!authChecked) {
+    return <main className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink/50">Checking your session…</main>;
+  }
+
+  if (!user) {
+    return <LoginPage onLogin={setUser} />;
+  }
+
+  async function logout() {
+    await request("/auth/logout", { method: "POST" }).catch(() => {});
+    setUser(null);
+  }
 
   async function generateEssay() {
     setLoading("essay");
@@ -112,9 +178,10 @@ export default function HomePage() {
           <a className="font-display text-xl font-semibold tracking-tight" href="/">
             essay<span className="text-coral">.</span>learner
           </a>
-          <span className="rounded-full border border-ink/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-ink/60">
-            GRE AWA
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="rounded-full border border-ink/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-ink/60">GRE AWA</span>
+            <button className="text-xs font-semibold text-ink/50 transition hover:text-coral" onClick={logout} type="button">Log out</button>
+          </div>
         </header>
 
         <section className="py-16">

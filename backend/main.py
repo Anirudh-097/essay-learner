@@ -5,12 +5,20 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from . import db
 from . import groq
+from .auth import (
+    SESSION_COOKIE,
+    authenticate,
+    cookie_secure,
+    create_session,
+    require_auth,
+    session_max_age,
+)
 
 
 PARAGRAPH_TYPES = (
@@ -99,6 +107,11 @@ class ProgressResponse(BaseModel):
     attempts: list[ProgressAttempt]
 
 
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
+
+
 app = FastAPI(title="Essay Learner API", version="0.1.0")
 # Allow requests from your Next.js frontend running on localhost:3000
 app.add_middleware(
@@ -127,10 +140,38 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/auth/login")
+def login(request: LoginRequest, response: Response) -> dict[str, str]:
+    if not authenticate(request.username, request.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    response.set_cookie(
+        SESSION_COOKIE,
+        create_session(request.username),
+        max_age=session_max_age(),
+        httponly=True,
+        secure=cookie_secure(),
+        samesite="lax",
+        path="/",
+    )
+    return {"username": request.username}
+
+
+@app.post("/auth/logout")
+def logout(response: Response) -> dict[str, str]:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"status": "ok"}
+
+
+@app.get("/auth/me")
+def current_user(username: str = Depends(require_auth)) -> dict[str, str]:
+    return {"username": username}
+
+
 @app.get("/topics", response_model=TopicList)
 def list_topics(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    username: str = Depends(require_auth),
 ) -> TopicList:
     rows = db.get_topics()
     return TopicList(
@@ -140,7 +181,7 @@ def list_topics(
 
 
 @app.get("/topics/{topic_id}", response_model=Topic)
-def topic_by_id(topic_id: int) -> Topic:
+def topic_by_id(topic_id: int, username: str = Depends(require_auth)) -> Topic:
     row = db.get_topic(topic_id=topic_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -148,7 +189,7 @@ def topic_by_id(topic_id: int) -> Topic:
 
 
 @app.get("/topic/today", response_model=Topic)
-def topic_today() -> Topic:
+def topic_today(username: str = Depends(require_auth)) -> Topic:
     row = db.get_or_assign_today()
     if row is None:
         raise HTTPException(status_code=404, detail="No topics have been imported")
@@ -163,7 +204,7 @@ def require_topic(topic_id: int) -> Topic:
 
 
 @app.post("/essay/generate", response_model=EssayResponse)
-def generate_essay(request: EssayRequest) -> EssayResponse:
+def generate_essay(request: EssayRequest, username: str = Depends(require_auth)) -> EssayResponse:
     topic = require_topic(request.topic_id)
     try:
         essay = groq.complete("essay.txt", {"topic": topic.topic})
@@ -174,7 +215,10 @@ def generate_essay(request: EssayRequest) -> EssayResponse:
 
 
 @app.get("/practice/prompt", response_model=PracticePrompt)
-def practice_prompt(exclude_topic_id: int | None = Query(None, ge=1)) -> PracticePrompt:
+def practice_prompt(
+    exclude_topic_id: int | None = Query(None, ge=1),
+    username: str = Depends(require_auth),
+) -> PracticePrompt:
     row = db.get_random_practice_topic(exclude_topic_id=exclude_topic_id)
     if row is None:
         raise HTTPException(status_code=404, detail="No practice topics have been imported")
@@ -186,7 +230,9 @@ def practice_prompt(exclude_topic_id: int | None = Query(None, ge=1)) -> Practic
 
 
 @app.post("/evaluate", response_model=EvaluationResponse)
-def evaluate_paragraph(request: EvaluationRequest) -> EvaluationResponse:
+def evaluate_paragraph(
+    request: EvaluationRequest, username: str = Depends(require_auth)
+) -> EvaluationResponse:
     if request.paragraph_type not in PARAGRAPH_TYPES:
         raise HTTPException(status_code=422, detail="Unknown paragraph type")
     if not request.paragraph.strip():
@@ -222,7 +268,7 @@ def evaluate_paragraph(request: EvaluationRequest) -> EvaluationResponse:
 
 
 @app.get("/progress", response_model=ProgressResponse)
-def progress() -> ProgressResponse:
+def progress(username: str = Depends(require_auth)) -> ProgressResponse:
     rows = db.get_progress()
     fields = ("grammar", "vocabulary", "structure", "argument_quality")
     metrics = {}
